@@ -17,7 +17,7 @@ import logcat.logcat
 
 @Serializable
 data class SyncData(
-    val deviceId: String = "",
+    val deviceId: String? = "",
     val backup: Backup? = null,
 )
 
@@ -26,28 +26,21 @@ abstract class SyncService(
     val json: Json,
     val syncPreferences: SyncPreferences,
 ) {
-    open suspend fun doSync(syncData: SyncData): Backup? {
+    /**
+     * Sync with remote service.
+     *
+     * - Return syncData itself (reference equal) if nothing changed.
+     * - Return null if sync failed.
+     */
+    open suspend fun doSync(syncData: SyncData): SyncData? {
+        assert(syncData.deviceId != null)
+
         beforeSync()
 
         val remoteSData = pullSyncData()
 
-        // Get local unique device ID
-        val localDeviceId = syncPreferences.uniqueDeviceID()
-        val lastSyncDeviceId = remoteSData?.deviceId
-
-        // Log the device IDs
-        logcat(LogPriority.DEBUG, "SyncService") {
-            "Local device ID: $localDeviceId, Last sync device ID: $lastSyncDeviceId"
-        }
-
-        // check if the last sync was done by the same device if so overwrite the remote data with the local data
-        if (lastSyncDeviceId == localDeviceId) {
-            pushSyncData(syncData)
-            return syncData.backup
-        }
-
         val finalSyncData =
-            if (remoteSData == null) {
+            if (remoteSData == null || remoteSData.deviceId == syncData.deviceId) {
                 pushSyncData(syncData)
                 syncData
             } else {
@@ -56,7 +49,7 @@ abstract class SyncService(
                 mergedSyncData
             }
 
-        return finalSyncData.backup
+        return finalSyncData
     }
 
     /**
@@ -117,7 +110,7 @@ abstract class SyncService(
 
         // Create the merged SData object
         return SyncData(
-            deviceId = syncPreferences.uniqueDeviceID(),
+            deviceId = localSyncData.deviceId,
             backup = mergedBackup,
         )
     }

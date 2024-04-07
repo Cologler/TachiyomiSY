@@ -128,7 +128,19 @@ class SyncManager(
             }
         }
 
-        val remoteBackup = syncService?.doSync(syncData)
+        fun updateSyncTimestamp() {
+            syncPreferences.lastSyncTimestamp().set(Date().time)
+        }
+
+        val syncedData = syncService?.doSync(syncData)
+
+        if (syncedData === syncData) {
+            // nothing changed
+            updateSyncTimestamp()
+            return
+        }
+
+        val remoteBackup = syncedData?.backup
 
         // Stop the sync early if the remote backup is null or empty
         if (remoteBackup?.backupManga?.size == 0) {
@@ -139,7 +151,7 @@ class SyncManager(
         // Check if it's first sync based on lastSyncTimestamp
         if (syncPreferences.lastSyncTimestamp().get() == 0L && databaseManga.isNotEmpty()) {
             // It's first sync no need to restore data. (just update remote data)
-            syncPreferences.lastSyncTimestamp().set(Date().time)
+            updateSyncTimestamp()
             notifier.showSyncSuccess("Updated remote data successfully")
             return
         }
@@ -162,8 +174,7 @@ class SyncManager(
 
             // It's local sync no need to restore data. (just update remote data)
             if (filteredFavorites.isEmpty()) {
-                // update the sync timestamp
-                syncPreferences.lastSyncTimestamp().set(Date().time)
+                updateSyncTimestamp()
                 notifier.showSyncSuccess("Sync completed successfully")
                 return
             }
@@ -182,8 +193,7 @@ class SyncManager(
                     ),
                 )
 
-                // update the sync timestamp
-                syncPreferences.lastSyncTimestamp().set(Date().time)
+                updateSyncTimestamp()
             } else {
                 logcat(LogPriority.ERROR) { "Failed to write sync data to file" }
             }
